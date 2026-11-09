@@ -7,13 +7,14 @@ import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 
-data class LiveFaceResult(val issue: LiveTrackingIssue, val landmarks: List<FacialLandmark> = emptyList())
+data class LiveFaceResult(val issue: LiveTrackingIssue, val landmarks: List<FacialLandmark> = emptyList(),
+                          val mesh: List<MeshPoint> = emptyList())
 
 /** Owned and used by one camera analyzer thread, separate from the still-photo engine. */
-class LiveFaceTracker(context: Context) : AutoCloseable {
+class LiveFaceTracker(context: Context, private val referenceMode: Boolean = false) : AutoCloseable {
     private val tracker = FaceLandmarker.createFromOptions(context, FaceLandmarker.FaceLandmarkerOptions.builder()
         .setBaseOptions(BaseOptions.builder().setModelAssetPath("face_landmarker.task").build())
-        .setRunningMode(RunningMode.VIDEO)
+        .setRunningMode(if (referenceMode) RunningMode.IMAGE else RunningMode.VIDEO)
         .setNumFaces(2)
         .setMinFaceDetectionConfidence(0.7f)
         .setMinFacePresenceConfidence(0.7f)
@@ -31,7 +32,7 @@ class LiveFaceTracker(context: Context) : AutoCloseable {
         return try {
             val timestamp = maxOf(timestampMs, previousTimestamp + 1)
             previousTimestamp = timestamp
-            val faces = tracker.detectForVideo(image, timestamp).faceLandmarks()
+            val faces = (if (referenceMode) tracker.detect(image) else tracker.detectForVideo(image, timestamp)).faceLandmarks()
             when {
                 faces.isEmpty() -> LiveFaceResult(LiveTrackingIssue.NO_FACE)
                 faces.size != 1 -> LiveFaceResult(LiveTrackingIssue.MULTIPLE_FACES)
@@ -45,7 +46,8 @@ class LiveFaceTracker(context: Context) : AutoCloseable {
                         }
                         FacialLandmark(name, p.x(), p.y())
                     }
-                    LiveFaceResult(LiveTrackingIssue.NONE, points)
+                    val spatial = mesh.map { MeshPoint(it.x(),it.y(),it.z()) }
+                    LiveFaceResult(LiveTrackingIssue.NONE, points, spatial)
                 }
             }
         } finally { image.close() }

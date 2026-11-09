@@ -503,6 +503,7 @@ class PlannerViewModel @Inject constructor(
 
     fun savePlan() {
         val current = _state.value
+        if (current.busy) return
         val patient = current.selectedPatient ?: return
         val pending = current.pendingPhoto ?: return
         val analysis = current.analysis ?: return
@@ -565,11 +566,25 @@ class PlannerViewModel @Inject constructor(
 
     fun clearMessage() = _state.update { it.copy(messageKey = null) }
 
-    fun loadPlan(snapshotId: String) {
+    fun deletePlan(snapshotId: String) {
+        val current = _state.value
+        if (current.busy) return
+        val plan = current.plans.firstOrNull { it.snapshotId == snapshotId } ?: return
+        _state.update { it.copy(busy = true, messageKey = null) }
         viewModelScope.launch {
-            _state.update {
-                it.copy(busy = true, pendingPhoto = null, analysis = null, nodes = emptyList(), selectedNode = null, messageKey = null)
-            }
+            runCatching { repository.deletePlanSnapshot(snapshotId) }
+                .onSuccess { deleted ->
+                    if (deleted && _state.value.currentPlanId == plan.planId && _state.value.savedPlanVersion == plan.version) clearPhoto()
+                    _state.update { it.copy(busy = false, messageKey = if (deleted) "plan_deleted" else "plan_delete_failed") }
+                }
+                .onFailure { _state.update { it.copy(busy = false, messageKey = "plan_delete_failed") } }
+        }
+    }
+
+    fun loadPlan(snapshotId: String, onLoaded: () -> Unit = {}) {
+        if (_state.value.busy) return
+        _state.update { it.copy(busy = true, messageKey = null) }
+        viewModelScope.launch {
             val loaded = runCatching {
                 val plan = repository.getPlanSnapshot(snapshotId) ?: error("snapshot missing")
                 val photo = repository.getPhoto(plan.photoId) ?: error("photo missing")
@@ -629,6 +644,7 @@ class PlannerViewModel @Inject constructor(
                 repository.observePlans(patient.id).collect { plans -> _state.update { it.copy(plans = plans) } }
             }
             clearHistory()
+            onLoaded()
         }
     }
 

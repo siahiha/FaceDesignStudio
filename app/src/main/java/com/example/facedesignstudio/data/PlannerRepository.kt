@@ -37,7 +37,28 @@ class PlannerRepository @Inject constructor(
     suspend fun getPlanSnapshot(snapshotId: String): HairlinePlanVersionEntity? =
         hairlinePlanDao.findBySnapshotId(snapshotId)
 
-    suspend fun getPhoto(photoId: String): PhotoAssetEntity? = photoAssetDao.findById(photoId)
+    suspend fun getPhoto(photoId: String): PhotoAssetEntity? = database.withTransaction {
+        val metadata = photoAssetDao.metadataById(photoId) ?: return@withTransaction null
+        val length = photoAssetDao.byteCount(photoId) ?: error("Photo bytes missing")
+        check(length > 0) { "Photo is empty" }
+        val bytes = ByteArray(length)
+        var offset = 0
+        while (offset < length) {
+            val size = minOf(128 * 1024, length - offset)
+            val chunk = photoAssetDao.readChunk(photoId, offset + 1, size) ?: error("Photo chunk missing")
+            check(chunk.size == size) { "Photo chunk incomplete" }
+            chunk.copyInto(bytes, offset)
+            offset += size
+        }
+        metadata.copy(originalBytes = bytes)
+    }
+
+    suspend fun deletePlanSnapshot(snapshotId: String): Boolean = database.withTransaction {
+        val snapshot = hairlinePlanDao.findBySnapshotId(snapshotId) ?: return@withTransaction false
+        val deleted = hairlinePlanDao.deleteSnapshot(snapshotId) > 0
+        if (deleted) photoAssetDao.deleteIfUnused(snapshot.photoId)
+        deleted
+    }
 
     suspend fun savePatient(patient: PatientEntity) {
         val existing = patientDao.findById(patient.id)

@@ -35,6 +35,19 @@ interface PhotoAssetDao {
 
     @Query("SELECT * FROM photo_assets WHERE id = :photoId LIMIT 1")
     suspend fun findById(photoId: String): PhotoAssetEntity?
+
+    // Keep the full photo BLOB out of CursorWindow when opening a saved plan.
+    @Query("SELECT id, patientId, source, mimeType, width, height, exifRotation, capturedAt, X'' AS originalBytes FROM photo_assets WHERE id = :photoId LIMIT 1")
+    suspend fun metadataById(photoId: String): PhotoAssetEntity?
+
+    @Query("SELECT length(originalBytes) FROM photo_assets WHERE id = :photoId")
+    suspend fun byteCount(photoId: String): Int?
+
+    @Query("SELECT substr(originalBytes, :start, :size) FROM photo_assets WHERE id = :photoId")
+    suspend fun readChunk(photoId: String, start: Int, size: Int): ByteArray?
+
+    @Query("DELETE FROM photo_assets WHERE id = :photoId AND NOT EXISTS (SELECT 1 FROM hairline_plan_versions WHERE photoId = :photoId)")
+    suspend fun deleteIfUnused(photoId: String)
 }
 
 @Dao
@@ -50,6 +63,9 @@ interface HairlinePlanDao {
 
     @Query("SELECT * FROM hairline_plan_versions WHERE snapshotId = :snapshotId LIMIT 1")
     suspend fun findBySnapshotId(snapshotId: String): HairlinePlanVersionEntity?
+
+    @Query("DELETE FROM hairline_plan_versions WHERE snapshotId = :snapshotId")
+    suspend fun deleteSnapshot(snapshotId: String): Int
 }
 
 @Dao

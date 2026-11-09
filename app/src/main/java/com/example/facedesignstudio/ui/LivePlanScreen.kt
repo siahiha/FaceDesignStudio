@@ -122,13 +122,15 @@ internal fun LivePlanScreen(state: PlannerUiState, modifier: Modifier = Modifier
     val display = liveFrameDisplay(running, frame?.capturedAt, now)
     val fresh = !cameraError && display == LiveFrameDisplay.CURRENT
     val issue = if (!fresh && frame != null) LiveTrackingIssue.STALE_FRAME else frame?.alignment?.issue
+    val issueMessage = if (issue == LiveTrackingIssue.REFERENCE_3D_UNAVAILABLE)
+        frame?.alignment?.referenceProblem?.message() ?: issue.message() else issue?.message()
     val matching = fresh && issue == LiveTrackingIssue.NONE
     val overlayMode = if (running && !cameraError) frame?.let { it.alignment.overlayMode(it.capturedAt, now, calibrated) } ?: LiveOverlayMode.HIDDEN else LiveOverlayMode.HIDDEN
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("${state.selectedPatient?.firstName.orEmpty()} ${state.selectedPatient?.lastName.orEmpty()} · نسخهٔ ${state.savedPlanVersion ?: "—"}", style = MaterialTheme.typography.titleSmall)
-                Text("راهنمای تصویری آزمایشی · دقت میلی‌متری تأیید نشده", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("ردیابی سه‌بعدی آزمایشی · سطح پیشانی تقریبی", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = { showHelp = true }) { Text("راهنما") }
         }
@@ -156,18 +158,18 @@ internal fun LivePlanScreen(state: PlannerUiState, modifier: Modifier = Modifier
                 Text(if (cameraError) "دریافت تصویر متوقف شد؛ آخرین تصویر نمایش داده می‌شود."
                     else if (!fresh) "منتظر تصویر تازه… خط موقتاً پنهان است."
                     else if (overlayMode == LiveOverlayMode.ALIGNING) "خط کمرنگ فقط برای تنظیم زاویه است؛ هنوز منطبق نیست."
-                    else "خط پنهان است: ${issue.message()}", Modifier.padding(12.dp), color = Color.White, style = MaterialTheme.typography.bodySmall)
+                    else "خط پنهان است: $issueMessage", Modifier.padding(12.dp), color = Color.White, style = MaterialTheme.typography.bodySmall)
             }
         }
         Text(when {
             cameraError -> "دوربین را دوباره راه‌اندازی کنید یا دوربین دیگر را انتخاب کنید."
             !permission -> "اجازهٔ دوربین را بدهید؛ در صورت رد دائمی از تنظیمات برنامه فعال کنید."
-            calibrated && matching -> "خط همراه صورت حرکت می‌کند؛ برای بررسی دوباره، تطبیق را بازنشانی کنید."
+            calibrated && matching -> "خط با گردش سر همراه می‌شود؛ حرکت آرام باشد و پیشانی کامل دیده شود."
             matching && ready -> "جای خط‌چین را بررسی کنید؛ صلیب‌های آبی باید داخل حلقه‌های سفید باشند. سپس تطبیق را تأیید کنید."
             matching -> "پیش‌نمایش خط روی صورت است؛ برای تأیید، ثابت بمانید. پایداری ${stableFrames.coerceAtMost(LiveCalibrationGate.REQUIRED_STABLE_FRAMES)} از ${LiveCalibrationGate.REQUIRED_STABLE_FRAMES}"
-            overlayMode == LiveOverlayMode.ALIGNING -> "زاویهٔ سر را آرام تنظیم کنید تا صلیب‌های آبی داخل حلقه‌های سفید قرار بگیرند؛ با انطباق، خط و نقاط پررنگ می‌شوند."
-            issue != null -> issue.message()
-            else -> "فقط همان مشتری، با صورت روبه‌رو و پیشانی کامل، در کادر باشد."
+            overlayMode == LiveOverlayMode.ALIGNING -> "تطبیق هنوز دقیق نیست؛ ثابت بمانید و صورت را کامل نشان دهید. با انطباق، خط و نقاط پررنگ می‌شوند."
+            issueMessage != null -> issueMessage
+            else -> "فقط همان مشتری با پیشانی کامل در کادر باشد؛ مدل طرح در حال آماده‌شدن است."
         }, minLines = 3, maxLines = 3, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         // Reserve the same space for every tracking state; otherwise the weighted camera
         // viewport resizes (and the face jumps) whenever matching or text wrapping changes.
@@ -197,16 +199,16 @@ internal fun LivePlanScreen(state: PlannerUiState, modifier: Modifier = Modifier
     }
     if (showHelp) StudioSheet("نمایش طرح روی چهره", { showHelp = false }) {
         Text("۱. نام مشتری و نسخهٔ طرح را بررسی کنید. فقط همان فرد در کادر باشد؛ برنامه هویت فرد را تشخیص نمی‌دهد.")
-        Text("۲. با دوربین پشت و نور کافی، صورت را مانند عکس مرجع روبه‌رو بگیرید. چشم‌ها، بینی، چانه و پیشانی باید کامل دیده شوند.")
+        Text("۲. با دوربین پشت و نور کافی، چشم‌ها، بینی، چانه و پیشانی کامل دیده شوند. نیازی به تکرار زاویهٔ عکس مرجع نیست؛ گردش آرام سر تا حدود ۴۰ درجه به طرفین و ۳۰ درجه بالا/پایین پشتیبانی می‌شود.")
         Text("۳. هنگام تنظیم زاویه، خط‌چین و نقاط کمرنگ‌اند. صلیب‌های آبیِ مرجع را با حلقه‌های سفیدِ صورت زنده هم‌راستا کنید. با انطباق مناسب، خط و نقاط خودکار پررنگ می‌شوند؛ پس از پایداری و بررسی جای خط، تأیید کنید تا خط پیوسته شود.")
         Text("خط کمرنگ تخمینی و فقط راهنمای تنظیم زاویه است. با کاهش انطباق، خط دوباره کمرنگ و تأیید پاک می‌شود. اگر تطبیق اولیه ممکن نباشد، صورت گم شود، چند چهره دیده شود یا تصویر دیر برسد، خط پنهان می‌شود.")
-        Text("این تطبیق دوبعدی است؛ کالیبراسیون میلی‌متری یا اسکن سه‌بعدی نیست. اختلاف کم نقاط، دقت خط روی پیشانی را تضمین نمی‌کند. پیش از استفاده برای علامت‌گذاری، دقت روی دستگاه و شرایط کار باید مستقل ارزیابی شود.")
+        Text("عمق صورت از همان دوربین تخمین زده می‌شود و سطح پیشانی تقریبی است؛ این اسکن دقیق یا کالیبراسیون میلی‌متری نیست. اختلاف کم نقاط، دقت خط روی پیشانی را تضمین نمی‌کند. دقت علامت‌گذاری باید مستقل ارزیابی شود.")
         Text("تصویر زنده فقط در حافظه پردازش می‌شود؛ ذخیره یا ارسال نمی‌شود. طرح ذخیره‌شده تغییر نمی‌کند.")
     }
     if (showReference) StudioSheet("عکس مرجع همان طرح", { showReference = false }) {
         val bitmap by produceState<Bitmap?>(null, photo) { value = withContext(Dispatchers.IO) { photo?.let { ImageDecoder.decode(it.originalBytes)?.bitmap } } }
         bitmap?.let { Image(it.asImageBitmap(), "عکس مرجع مشتری", Modifier.fillMaxWidth().height(280.dp), contentScale = ContentScale.Fit) }
-        Text("زاویهٔ صورت و هویت مشتری را با این عکس مقایسه کنید. بازگشت از این پنل به تأیید مجدد تطبیق نیاز دارد.")
+        Text("هویت مشتری و شکل طرح را با این عکس بررسی کنید؛ لازم نیست همان زاویه را تکرار کند. بازگشت از این پنل به تأیید مجدد تطبیق نیاز دارد.")
     }
     // Do not leave a confirmed guide running unseen under a modal panel.
     LaunchedEffect(showReference, showHelp) {
@@ -230,6 +232,8 @@ private fun CameraAnalysisSession(
         val main = ContextCompat.getMainExecutor(context)
         val worker = Executors.newSingleThreadExecutor()
         var tracker: LiveFaceTracker? = null
+        var spatialReference: SpatialReference? = null
+        var referenceProblem: ReferencePreparationIssue? = null
         var provider: ProcessCameraProvider? = null
         val analyzer = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -239,6 +243,38 @@ private fun CameraAnalysisSession(
                 ResolutionStrategy(AndroidSize(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)).build())
             .build()
         if (running && photo != null && reference != null) {
+            // Prepare on the owning worker before analysis starts. Reconstruct from the
+            // original photo for old saved plans; do not change their nodes or database.
+            worker.execute {
+                if (alive.get()) {
+                    spatialReference = runCatching {
+                        val image = ImageDecoder.decode(photo.originalBytes)?.bitmap ?: run {
+                            referenceProblem = ReferencePreparationIssue.IMAGE_UNREADABLE
+                            return@runCatching null
+                        }
+                        try {
+                            LiveFaceTracker(context, referenceMode = true).use { engine ->
+                                val face = engine.detect(image, 0)
+                                if (face.issue != LiveTrackingIssue.NONE) {
+                                    referenceProblem = when (face.issue) {
+                                        LiveTrackingIssue.NO_FACE -> ReferencePreparationIssue.FACE_NOT_FOUND
+                                        LiveTrackingIssue.MULTIPLE_FACES -> ReferencePreparationIssue.MULTIPLE_FACES
+                                        LiveTrackingIssue.MODEL_ERROR -> ReferencePreparationIssue.MODEL_ERROR
+                                        else -> ReferencePreparationIssue.INVALID_DATA
+                                    }
+                                    null
+                                } else SpatialFaceAlignment.prepare(
+                                    face.mesh, image.width, image.height, nodes, reference.landmarks) {
+                                    referenceProblem = ReferencePreparationIssue.fromRejection(it)
+                                }
+                            }
+                        } finally { image.recycle() }
+                    }.onFailure { referenceProblem = ReferencePreparationIssue.MODEL_ERROR }.getOrNull()
+                    // Model startup must not consume the first camera frame's freshness budget.
+                    if (alive.get()) runCatching { tracker = LiveFaceTracker(context) }
+                        .onFailure { main.execute { if (alive.get()) latestError() } }
+                }
+            }
             analyzer.setAnalyzer(worker) { proxy ->
                 var frameBitmap: Bitmap? = null
                 try {
@@ -252,7 +288,8 @@ private fun CameraAnalysisSession(
                         val face = runCatching { engine.detect(rotated, capturedAt) }
                             .getOrElse { LiveFaceResult(LiveTrackingIssue.MODEL_ERROR) }
                         val alignment = if (face.issue != LiveTrackingIssue.NONE) LiveAlignmentResult(face.issue) else {
-                            LiveAlignment.align(reference.landmarks, photo.width, photo.height, face.landmarks, rotated.width, rotated.height, nodes)
+                            spatialReference?.let { SpatialFaceAlignment.align(it, face.mesh, rotated.width, rotated.height) }
+                                ?: LiveAlignmentResult(LiveTrackingIssue.REFERENCE_3D_UNAVAILABLE, referenceProblem = referenceProblem)
                         }
                         val result = LiveCameraFrame(rotated, capturedAt, alignment)
                         main.execute { if (alive.get()) latestFrame(result) else rotated.recycle() }
@@ -265,13 +302,19 @@ private fun CameraAnalysisSession(
             }
             val future = ProcessCameraProvider.getInstance(context)
             future.addListener({
-                if (alive.get()) try {
-                    val cameraProvider = future.get()
-                    provider = cameraProvider
-                    val selector = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-                    if (!cameraProvider.hasCamera(selector)) latestError()
-                    else cameraProvider.bindToLifecycle(owner, selector, analyzer)
-                } catch (_: Exception) { latestError() }
+                // Queue behind reference/model preparation before binding. Otherwise an
+                // old first proxy may wait through startup but appear newly captured.
+                if (alive.get()) worker.execute {
+                    main.execute {
+                        if (alive.get()) try {
+                            val cameraProvider = future.get()
+                            provider = cameraProvider
+                            val selector = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+                            if (!cameraProvider.hasCamera(selector)) latestError()
+                            else cameraProvider.bindToLifecycle(owner, selector, analyzer)
+                        } catch (_: Exception) { latestError() }
+                    }
+                }
             }, main)
         }
         onDispose {
@@ -299,6 +342,10 @@ private fun LiveFrameCanvas(frame: LiveCameraFrame, mirrored: Boolean, overlayMo
             if (drawOverlay) {
                 val nodes = frame.alignment.nodes
                 val path = Path()
+                frame.alignment.curve.forEachIndexed { i,p ->
+                    val point = screen(p)
+                    if (i == 0) path.moveTo(point.x,point.y) else path.lineTo(point.x,point.y)
+                }
                 nodes.firstOrNull()?.let { path.moveTo(screen(FacePoint(it.x, it.y)).x, screen(FacePoint(it.x, it.y)).y) }
                 nodes.zipWithNext().forEach { (a, b) ->
                     val c1 = screen(FacePoint(a.outX, a.outY)); val c2 = screen(FacePoint(b.inX, b.inY)); val end = screen(FacePoint(b.x, b.y))
@@ -338,4 +385,18 @@ private fun LiveTrackingIssue.message(): String = when (this) {
     LiveTrackingIssue.OUT_OF_FRAME -> "بخشی از طرح بیرون کادر است؛ دوربین را کمی عقب ببرید."
     LiveTrackingIssue.MODEL_ERROR -> "تحلیل تصویر ناموفق بود؛ دوباره تلاش کنید."
     LiveTrackingIssue.STALE_FRAME -> "تصویر به‌روز نیست؛ طرح تا دریافت تصویر تازه پنهان است."
+    LiveTrackingIssue.REFERENCE_3D_UNAVAILABLE -> "سطح سه‌بعدی این طرح قابل برآورد نیست؛ عکس مرجع و قرارگیری خط روی پیشانی را بررسی کنید."
+    LiveTrackingIssue.POSE_OUT_OF_RANGE -> "چرخش سر زیاد است؛ کمی به سمت دوربین برگردید. لازم نیست زاویهٔ عکس مرجع را تکرار کنید."
+}
+
+private fun ReferencePreparationIssue.message(): String = when (this) {
+    ReferencePreparationIssue.IMAGE_UNREADABLE -> "عکس ذخیره‌شده باز نشد؛ طرح را دوباره باز کنید."
+    ReferencePreparationIssue.FACE_NOT_FOUND -> "چهره در عکس ذخیره‌شده پیدا نشد؛ عکس واضح‌تر با صورت کامل لازم است."
+    ReferencePreparationIssue.MULTIPLE_FACES -> "در عکس مرجع چند چهره دیده می‌شود؛ عکس فقط از مشتری لازم است."
+    ReferencePreparationIssue.POSE_OUT_OF_RANGE -> "خم‌شدن یا چرخش صورت در عکس ذخیره‌شده بیش از محدودهٔ ۴۰ درجه است؛ عکس با زاویهٔ کمتر لازم است."
+    ReferencePreparationIssue.LANDMARK_MISMATCH -> "نقاط تشخیص‌داده‌شده با نقاط طرح ذخیره‌شده تطابق ندارند؛ عکس را در ویرایشگر دوباره تحلیل و طرح را بررسی کنید."
+    ReferencePreparationIssue.CURVE_OUTSIDE_FOREHEAD -> "بخشی از خط خارج از محدودهٔ قابل برآورد پیشانی است؛ جای خط را در ویرایشگر بررسی کنید."
+    ReferencePreparationIssue.SURFACE_UNAVAILABLE -> "عمق پیشانی در عکس ذخیره‌شده قابل برآورد نیست؛ عکس واضح‌تر با پیشانی کامل لازم است."
+    ReferencePreparationIssue.INVALID_DATA -> "نقاط عکس یا خط ذخیره‌شده ناقص‌اند؛ طرح را در ویرایشگر بررسی کنید."
+    ReferencePreparationIssue.MODEL_ERROR -> "مدل عکس مرجع آماده نشد؛ «تطبیق دوباره» را بزنید."
 }

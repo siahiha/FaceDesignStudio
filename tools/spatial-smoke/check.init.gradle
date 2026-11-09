@@ -1,0 +1,12 @@
+// Optional framework-only smoke runner; never changes the production package or assets.
+allprojects { p ->
+    p.afterEvaluate {
+        if (p.name == "app") {
+            p.layout.buildDirectory.set(p.rootProject.file("build/spatial-smoke"))
+            p.android.defaultConfig.applicationId = "com.example.facedesignstudio.spatialsmoke"
+            p.android.sourceSets.debug.java.srcDir(p.rootProject.file("tools/spatial-smoke/src"))
+            p.android.sourceSets.debug.assets.srcDir(p.file("src/androidTest/assets"))
+            p.android.sourceSets.debug.manifest.srcFile(p.rootProject.file("tools/spatial-smoke/AndroidManifest.xml"))
+        }
+    }
+}

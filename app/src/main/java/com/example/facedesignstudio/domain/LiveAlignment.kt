@@ -29,6 +29,7 @@ data class FaceRegistration(
 enum class LiveTrackingIssue {
     NONE, NO_FACE, MULTIPLE_FACES, INVALID_REFERENCE, REFERENCE_NOT_FRONTAL, INVALID_LANDMARKS,
     FACE_TOO_SMALL, POSE_MISMATCH, POOR_FIT, OUT_OF_FRAME, MODEL_ERROR, STALE_FRAME,
+    REFERENCE_3D_UNAVAILABLE, POSE_OUT_OF_RANGE,
 }
 
 data class LiveAlignmentResult(
@@ -41,13 +42,19 @@ data class LiveAlignmentResult(
     val eyeDistance: Float = 0f,
     val frameAspect: Float = 1f,
     val guidanceAvailable: Boolean = false,
-)
+    val spatialRegistration: SpatialTransform? = null,
+    val curve: List<FacePoint> = emptyList(),
+    val referenceProblem: ReferencePreparationIssue? = null,
+) {
+    val hasRegistration get() = registration != null || spatialRegistration != null
+    val hasCurve get() = nodes.size >= 2 || curve.size >= 2
+}
 
 enum class LiveOverlayMode { HIDDEN, ALIGNING, PREVIEW, CONFIRMED }
 
 /** A valid registration is visible for inspection even before the user confirms it. */
 fun LiveAlignmentResult.overlayMode(capturedAt: Long, nowMs: Long, calibrated: Boolean): LiveOverlayMode {
-    if (registration == null || nodes.size < 2 ||
+    if (!hasRegistration || !hasCurve ||
         nowMs - capturedAt !in 0..LiveCalibrationGate.MAX_FRAME_AGE_MS
     ) return LiveOverlayMode.HIDDEN
     if (issue != LiveTrackingIssue.NONE) {
@@ -178,7 +185,7 @@ class LiveCalibrationGate {
 
     fun accept(result: LiveAlignmentResult, timestampMs: Long, nowMs: Long): Boolean {
         val previousTime = lastTimestamp
-        if (result.issue != LiveTrackingIssue.NONE || result.registration == null ||
+        if (result.issue != LiveTrackingIssue.NONE || !result.hasRegistration || !result.hasCurve ||
             nowMs - timestampMs !in 0..MAX_FRAME_AGE_MS ||
             (previousTime != null && timestampMs <= previousTime)
         ) { reset(); return false }

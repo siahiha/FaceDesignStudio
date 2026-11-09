@@ -51,6 +51,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.MenuAnchorType
@@ -187,27 +188,6 @@ fun FaceDesignApp(viewModel: PlannerViewModel) {
             }
         }
     }
-    val pdfExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
-        if (uri != null) {
-            val photo = state.pendingPhoto
-            val patient = state.selectedPatient
-            val analysis = state.analysis
-            if (photo != null && patient != null && analysis != null) {
-                scope.launch {
-                    val bytes = withContext(Dispatchers.IO) {
-                        val decoded = ImageDecoder.decode(photo.originalBytes) ?: return@withContext null
-                        try {
-                            PlanPdfExporter.render(decoded.bitmap, patient, analysis, state.nodes, state.transform, state.savedPlanVersion, state.thresholdPercent, state.hairlineReference, state.hairlineProfile, state.hairlineAppearance)
-                        } finally {
-                            decoded.bitmap.recycle()
-                        }
-                    }
-                    val saved = withContext(Dispatchers.IO) { bytes?.let { data -> runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(data) } ?: error("no output") }.isSuccess } == true }
-                    snackbar.showSnackbar(if (saved) "خروجی PDF ذخیره شد." else "ساخت یا ذخیرهٔ PDF ناموفق بود.")
-                }
-            }
-        }
-    }
     val imageExportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
         if (uri != null) {
             val photo = state.pendingPhoto
@@ -253,7 +233,9 @@ fun FaceDesignApp(viewModel: PlannerViewModel) {
             "patient_saved" -> "اطلاعات بیمار ذخیره شد"
             "patient_deleted" -> "بیمار حذف شد"
             "patient_code_exists" -> "کد بیمار تکراری است یا ذخیره انجام نشد"
-            "plan_saved" -> "طرح در پایگاه دادهٔ محلی ذخیره شد"
+            "plan_saved" -> "طرح به‌عنوان نسخهٔ ${state.savedPlanVersion} ذخیره شد"
+            "plan_deleted" -> "نسخهٔ انتخاب‌شدهٔ طرح حذف شد"
+            "plan_delete_failed" -> "حذف طرح انجام نشد؛ دوباره تلاش کنید"
             "save_failed" -> "ذخیرهٔ طرح انجام نشد"
             "plan_load_failed" -> "بارگذاری طرح ذخیره‌شده انجام نشد"
             else -> key
@@ -334,7 +316,8 @@ fun FaceDesignApp(viewModel: PlannerViewModel) {
                     state = state,
                     onNewPlan = { viewModel.clearPhoto(); go(PlannerScreen.PHOTO_SOURCE) },
                     onEditPatient = { editingPatientId = state.selectedPatient?.id; go(PlannerScreen.PATIENT_FORM) },
-                    onPlan = { plan -> viewModel.loadPlan(plan.snapshotId); go(PlannerScreen.EDITOR) },
+                    onPlan = { plan -> viewModel.loadPlan(plan.snapshotId) { go(PlannerScreen.EDITOR) } },
+                    onDeletePlan = { plan -> viewModel.deletePlan(plan.snapshotId) },
                     onDeletePatient = {
                         state.selectedPatient?.id?.let { viewModel.deletePatient(it) }
                         screens.clear()
@@ -367,11 +350,6 @@ fun FaceDesignApp(viewModel: PlannerViewModel) {
                     viewModel = viewModel,
                     onSave = viewModel::savePlan,
                     onLivePlan = { if (state.saveComplete && state.savedPlanVersion != null && !state.busy) go(PlannerScreen.LIVE_PLAN) },
-                    onExport = {
-                        val code = state.selectedPatient?.patientCode ?: "patient"
-                        val version = state.savedPlanVersion ?: 1
-                        pdfExportPicker.launch("FaceDesign_${code}_v${version}.pdf")
-                    },
                     onExportImage = { annotated ->
                         annotatedImageExport = annotated
                         val code = state.selectedPatient?.patientCode?.replace(Regex("[^A-Za-z0-9_-]"), "_") ?: "patient"
@@ -495,6 +473,7 @@ private fun PatientFormScreen(
 private fun PatientDetailScreen(
     state: PlannerUiState, onNewPlan: () -> Unit, onEditPatient: () -> Unit,
     onPlan: (HairlinePlanVersionEntity) -> Unit, onDeletePatient: () -> Unit,
+    onDeletePlan: (HairlinePlanVersionEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val patient = state.selectedPatient
@@ -504,6 +483,7 @@ private fun PatientDetailScreen(
     }
     var confirmDelete by remember { mutableStateOf(false) }
     var detailsOpen by remember { mutableStateOf(false) }
+    var deletingPlan by remember { mutableStateOf<HairlinePlanVersionEntity?>(null) }
     Column(modifier.fillMaxSize().padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
@@ -511,7 +491,7 @@ private fun PatientDetailScreen(
                     Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("پروندهٔ ${patient.patientCode}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         Text("${patient.firstName} ${patient.lastName}", style = MaterialTheme.typography.headlineSmall)
-                        TextButton(onClick = { detailsOpen = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("اطلاعات و ویرایش پرونده") }
+                        TextButton(onClick = { detailsOpen = true }, enabled = !state.busy, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("اطلاعات و ویرایش پرونده") }
                     }
                 }
             }
@@ -523,9 +503,12 @@ private fun PatientDetailScreen(
                     Text("یک عکس انتخاب کنید و خط رویش را بسازید.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            items(state.plans, key = { it.snapshotId }) { plan -> PlanSummaryCard(plan) { onPlan(plan) } }
+            items(state.plans, key = { it.snapshotId }) { plan ->
+                PlanSummaryCard(plan, enabled = !state.busy, onEdit = { onPlan(plan) }, onDelete = { deletingPlan = plan })
+            }
         }
-        StudioPrimary("شروع طراحی جدید", onNewPlan, Modifier.padding(bottom = 16.dp))
+        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        StudioPrimary("شروع طراحی جدید", onNewPlan, Modifier.padding(bottom = 16.dp), enabled = !state.busy)
     }
     if (detailsOpen) StudioSheet("اطلاعات بیمار", { detailsOpen = false }) {
         Text("${patient.firstName} ${patient.lastName}", style = MaterialTheme.typography.titleMedium)
@@ -541,12 +524,28 @@ private fun PatientDetailScreen(
         confirmButton = { TextButton(onClick = { confirmDelete = false; onDeletePatient() }) { Text("حذف پرونده", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("انصراف") } },
     )
+    deletingPlan?.let { plan -> AlertDialog(
+        onDismissRequest = { deletingPlan = null },
+        title = { Text("حذف نسخهٔ ${plan.version} طرح؟") },
+        text = { Text("این نسخه و عکس اختصاصی آن حذف می‌شوند. نسخه‌های دیگر و پروندهٔ مشتری باقی می‌مانند. این کار قابل بازگشت نیست.") },
+        confirmButton = { TextButton(enabled = !state.busy, onClick = { deletingPlan = null; onDeletePlan(plan) }) { Text("حذف نسخه", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { deletingPlan = null }) { Text("انصراف") } },
+    ) }
 }
 
 @Composable
-private fun PlanSummaryCard(plan: HairlinePlanVersionEntity, onClick: () -> Unit) {
+private fun PlanSummaryCard(plan: HairlinePlanVersionEntity, enabled: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
     val date = remember(plan.savedAt) { java.text.SimpleDateFormat("d MMM yyyy · HH:mm", java.util.Locale.forLanguageTag("fa")).format(java.util.Date(plan.savedAt)) }
-    StudioAction("طرح خط رویش · نسخهٔ ${plan.version}", date, StudioSymbol.Line, onClick)
+    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("طرح خط رویش · نسخهٔ ${plan.version}", style = MaterialTheme.typography.titleSmall)
+            Text(date, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(onClick = onEdit, enabled = enabled) { StudioIcon(StudioSymbol.Edit); Spacer(Modifier.width(8.dp)); Text("بازکردن و ویرایش") }
+                TextButton(onClick = onDelete, enabled = enabled) { Text("حذف", color = MaterialTheme.colorScheme.error) }
+            }
+        }
+    }
 }
 
 @Composable
@@ -791,7 +790,7 @@ private fun SelectionDropdown(
 }
 
 @Composable
-private fun EditorScreen(state: PlannerUiState, viewModel: PlannerViewModel, onSave: () -> Unit, onLivePlan: () -> Unit, onExport: () -> Unit, onExportImage: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+private fun EditorScreen(state: PlannerUiState, viewModel: PlannerViewModel, onSave: () -> Unit, onLivePlan: () -> Unit, onExportImage: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val image = rememberPhotoBitmap(state.pendingPhoto?.originalBytes)
     var preview by rememberSaveable { mutableStateOf(false) }
     var showOriginal by rememberSaveable { mutableStateOf(false) }
@@ -828,7 +827,7 @@ private fun EditorScreen(state: PlannerUiState, viewModel: PlannerViewModel, onS
             }
         }
         Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            StudioPrimary(if (state.busy) "در حال ذخیره…" else if (state.saveComplete) "ذخیرهٔ نسخهٔ دیگر" else "ذخیرهٔ طرح", onSave, Modifier.weight(1f), ready)
+            StudioPrimary(if (state.busy) "در حال ذخیره…" else if (state.saveComplete) "ذخیرهٔ نسخهٔ دیگر" else if (state.currentPlanId != null) "ذخیرهٔ تغییرات" else "ذخیرهٔ طرح", onSave, Modifier.weight(1f), ready)
             OutlinedButton(onClick = { panel = "export" }, enabled = ready, modifier = Modifier.heightIn(min = 56.dp), shape = RoundedCornerShape(18.dp)) { StudioIcon(StudioSymbol.Export); Spacer(Modifier.width(8.dp)); Text("خروجی") }
         }
     }
@@ -872,7 +871,6 @@ private fun EditorScreen(state: PlannerUiState, viewModel: PlannerViewModel, onS
             StudioAction("نمایش روی دوربین زنده", if (state.saveComplete) "تطبیق طرح ذخیره‌شده با چهرهٔ مشتری" else "ابتدا تغییرات طرح را ذخیره کنید", StudioSymbol.Camera, { panel = null; onLivePlan() }, enabled = ready && state.saveComplete && state.savedPlanVersion != null)
             StudioAction("تصویر طرح", "عکس و خط رویش، بدون ابزارهای ویرایش", StudioSymbol.Gallery, { panel = null; onExportImage(false) })
             StudioAction("تصویر با راهنماها", "همراه با محور تقارن و نقطه‌های طرح", StudioSymbol.Nodes, { panel = null; onExportImage(true) })
-            StudioAction("گزارش PDF", "طرح به همراه اطلاعات بیمار", StudioSymbol.Export, { panel = null; onExport() })
         }
     }
 }

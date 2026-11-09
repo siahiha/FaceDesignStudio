@@ -53,7 +53,11 @@ ImageDecoder
 | `data/PlannerRepository.kt` | ذخیرهٔ بیمار و تراکنش Photo + Plan snapshot |
 | `data/local/PlannerEntities.kt` | Room entityها |
 | `ui/PlanImageExporter.kt` | PNG/تصویر خروجی |
-| `ui/PlanPdfExporter.kt` | PDF خروجی |
+| `domain/LiveFaceTracker.kt` | مدل IMAGE برای مرجع و VIDEO برای فریم زنده، خروجی نقاط سه‌بعدی |
+| `domain/SpatialFaceAlignment.kt` | ساخت سطح تقریبی پیشانی، اتصال منحنی و تطبیق سه‌بعدی |
+| `domain/LiveAlignment.kt` | قرارداد نتیجه و نمایش راهنما، دروازهٔ پایداری/تأیید و تطبیق دوبعدی قدیمی |
+| `domain/LiveFrameDisplay.kt` | حفظ تصویر آخر و تشخیص انتظار برای فریم تازه |
+| `ui/LivePlanScreen.kt` | جلسهٔ دوربین، رسم هم‌زمان تصویر و خط، خطاهای مشخص مرجع |
 
 ## 4. State و Navigation
 
@@ -88,6 +92,10 @@ Entityها:
 
 `activePlanThresholdPercent` مقدار آستانهٔ زمان پذیرش یا بارگذاری طرح را جدا از تنظیم عمومی نگه می‌دارد. `saveThreshold` طرح، تحلیل و history جاری را پاک نمی‌کند.
 
+`PlannerRepository.getPhoto` در یک تراکنش metadata بدون BLOB و سپس قطعه‌های ۱۲۸ کیلوبایتی با `substr` را می‌خواند؛ عکس کامل از بایت‌های دست‌نخورده بازسازی می‌شود. این مسیر در `loadPlan` استفاده می‌شود و callback ورود به Editor فقط پس از بارگذاری موفق فراخوانی می‌شود.
+
+`deletePlanSnapshot` در یک تراکنش snapshot را حذف و سپس با شرط `NOT EXISTS` عکسِ بدون ارجاع را پاک می‌کند. ViewModel در زمان عملیات `busy` است و اگر نسخهٔ جاری حذف شود، عکس و وضعیت ویرایشگر را پاک می‌کند. نسخه‌های دیگر و رکورد بیمار تغییر نمی‌کنند.
+
 ## 7. هندسه و Editor
 
 تمام Node و Landmarkهای هندسی normalized هستند. تراز، zoom، pan و offset محور در `EditorTransform` نگهداری می‌شوند و عکس اصلی تغییر نمی‌کند.
@@ -112,13 +120,15 @@ ViewModel قبل از تغییر snapshot از Nodeها، transform، ظاهر �
 
 ## 9. Export
 
-`PlanImageExporter` تصویر annotated یا clean تولید می‌کند و `PlanPdfExporter` PDF می‌سازد. خروجی‌ها شامل transform و خط رویش فعلی هستند. عکس اصلی در DB overwrite نمی‌شود.
+`PlanImageExporter` تصویر annotated یا clean تولید می‌کند. خروجی‌ها شامل transform و خط رویش فعلی هستند. عکس اصلی در DB overwrite نمی‌شود.
 
 رندر و نوشتن خروجی در `Dispatchers.IO` انجام می‌شود. نام فایل شمارهٔ `savedPlanVersion` را استفاده می‌کند؛ برای طرحی که هنوز ذخیره نشده، مقدار پیش‌فرض ۱ است. تولید خروجی به ورود به پیش‌نمایش وابسته نیست.
 
 ## 10. آزمون‌های موجود
 
-در `app/src/test/java/com/example/facedesignstudio/domain`، کلاس `HairlineNodeInsertionTest` هشت تست درج و حفظ منحنی و کلاس `CoordinateTransformerDragTest` شش تست حرکت نسبی دارد. کلاس‌های `LiveAlignmentTest`، `LiveCalibrationGateTest` و `LiveOverlayModeTest` به‌ترتیب ۱۱، ۱۲ و ۷ تست دارند؛ LiveFrameDisplayTest نیز ۳ تست تداوم تصویر و تازگی راهنما دارد. همراه با یک تست نمونه، ۴۸ تست واحد پاس شده‌اند. این پوشش شامل dispatch واقعی gestureهای Compose، Room یا چرخهٔ عمر ViewModel نیست؛ جزئیات و چک‌لیست پذیرش در سند 05 است.
+در `app/src/test/java/com/example/facedesignstudio/domain`، کلاس `HairlineNodeInsertionTest` هشت تست درج و حفظ منحنی و کلاس `CoordinateTransformerDragTest` شش تست حرکت نسبی دارد. کلاس‌های `LiveAlignmentTest`، `LiveCalibrationGateTest` و `LiveOverlayModeTest` به‌ترتیب ۱۱، ۱۲ و ۷ تست دارند؛ LiveFrameDisplayTest نیز ۳ تست تداوم تصویر و تازگی راهنما دارد و SpatialFaceAlignmentTest دارای ۱۳ تست ردیابی سه‌بعدی و سطح پیشانی است. همراه با یک تست نمونه، ۶۱ تست واحد پاس شده‌اند. این پوشش شامل dispatch واقعی gestureهای Compose، Room یا چرخهٔ عمر ViewModel نیست؛ جزئیات و چک‌لیست پذیرش در سند 05 است.
+
+آزمون دستگاهی `PlanCrudSmokeRunner` جدا از تست‌های JVM، Repository/Room و مسیر load/edit/save/delete در ViewModel را با دیتابیس موقت می‌سنجد. آزمون عکس بیش از ۴ MiB و حفظ نسخه‌ها/عکس مشترک روی گوشی موفق بوده است. این پوشش محدود جای تست جامع چرخهٔ عمر یا gesture واقعی را نمی‌گیرد؛ روش اجرا در [ابزار تست گوشی](../tools/spatial-smoke/README.md) آمده است.
 
 ## 11. موارد خارج از معماری فعلی
 
@@ -130,4 +140,4 @@ ViewModel قبل از تغییر snapshot از Nodeها، transform، ظاهر �
 
 ## 12. دوربین زندهٔ طرح
 
-`LivePlanScreen` یک analyzer اختصاصی CameraX و `LiveFaceTracker` مستقل با حالت VIDEO دارد. `LiveAlignment` طرح ذخیره‌شده را با تبدیل تشابه دوبعدی به نقاط فریم منتقل می‌کند؛ `LiveCalibrationGate` پایداری و تأیید جلسه را مدیریت می‌کند. فریم و خط با هم رسم می‌شوند و به state طرح یا Room نوشته نمی‌شوند. چرخهٔ عمر، تبدیل جهت و قرینگی، کنترل کیفیت و محدودیت‌ها در [سند 10](10-LIVE-PLAN-GUIDE.md) آمده‌اند.
+`LivePlanScreen` یک analyzer اختصاصی CameraX و `LiveFaceTracker` مستقل با حالت VIDEO دارد. `SpatialFaceAlignment` منحنی را روی سطح تقریبی پیشانی قرار می‌دهد و با تبدیل تشابه سه‌بعدی به فریم منتقل می‌کند؛ عکس مرجع ابتدای جلسه در حالت IMAGE بازتحلیل می‌شود؛ `LiveCalibrationGate` پایداری و تأیید جلسه را مدیریت می‌کند. فریم و خط با هم رسم می‌شوند و به state طرح یا Room نوشته نمی‌شوند. چرخهٔ عمر، تبدیل جهت و قرینگی، کنترل کیفیت و محدودیت‌ها در [سند 10](10-LIVE-PLAN-GUIDE.md) آمده‌اند.

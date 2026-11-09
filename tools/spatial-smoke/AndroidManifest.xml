@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <instrumentation android:name="com.example.facedesignstudio.PlanCrudSmokeRunner"
+        android:targetPackage="com.example.facedesignstudio.spatialsmoke" />
+    <instrumentation android:name="com.example.facedesignstudio.SpatialSmokeRunner"
+        android:targetPackage="com.example.facedesignstudio.spatialsmoke" />
+    <instrumentation android:name="com.example.facedesignstudio.StoredReferenceSmokeRunner"
+        android:targetPackage="com.example.facedesignstudio" />
+</manifest>
