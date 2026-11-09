@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+    <!-- Mirrors StudioLaunch's finished 200-unit Canvas within the 192dp safe area. -->
+    <group
+        android:translateX="48"
+        android:translateY="48"
+        android:scaleX="0.96"
+        android:scaleY="0.96">
+        <path
+            android:fillColor="#EDE7F5"
+            android:pathData="M100,6 A94,94 0,1 1,100,194 A94,94 0,1 1,100,6" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@color/splash_violet"
+            android:strokeAlpha="0.09"
+            android:strokeWidth="0.7"
+            android:pathData="M100,1 A99,99 0,1 1,100,199 A99,99 0,1 1,100,1" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@color/splash_gold"
+            android:strokeAlpha="0.24"
+            android:strokeWidth="0.8"
+            android:pathData="M100,23 v2 M100,30 v2 M100,37 v2 M100,44 v2 M100,51 v2 M100,58 v2 M100,65 v2 M100,72 v2 M100,79 v2 M100,86 v2 M100,93 v2 M100,100 v2 M100,107 v2 M100,114 v2 M100,121 v2 M100,128 v2 M100,135 v2 M100,142 v2 M100,149 v2 M100,156 v2 M100,163 v2" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@color/splash_violet"
+            android:strokeAlpha="0.65"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round"
+            android:pathData="M48,86 C45,119 63,150 86,164 C94,170 106,170 114,164 C137,150 155,119 152,86" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@color/splash_violet"
+            android:strokeAlpha="0.35"
+            android:strokeWidth="1.25"
+            android:strokeLineCap="round"
+            android:pathData="M69,99 C76,95 83,95 89,99 M111,99 C117,95 124,95 131,99 M100,103 L97,120 Q100,123 104,120 M90,139 Q100,143 110,139" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@color/splash_violet"
+            android:strokeWidth="2.8"
+            android:strokeLineCap="round"
+            android:pathData="M42,88 C52,74 63,51 82,57 C92,60 95,55 100,53 C105,55 108,60 118,57 C137,51 148,74 158,88" />
+        <path
+            android:fillColor="@color/splash_background"
+            android:pathData="M42,82.8 A5.2,5.2 0,1 1,42,93.2 A5.2,5.2 0,1 1,42,82.8 M100,47.8 A5.2,5.2 0,1 1,100,58.2 A5.2,5.2 0,1 1,100,47.8 M158,82.8 A5.2,5.2 0,1 1,158,93.2 A5.2,5.2 0,1 1,158,82.8" />
+        <path
+            android:fillColor="@color/splash_violet"
+            android:pathData="M42,85 A3,3 0,1 1,42,91 A3,3 0,1 1,42,85 M158,85 A3,3 0,1 1,158,91 A3,3 0,1 1,158,85" />
+        <path
+            android:fillColor="@color/splash_gold"
+            android:pathData="M100,50 A3,3 0,1 1,100,56 A3,3 0,1 1,100,50" />
+    </group>
+</vector>

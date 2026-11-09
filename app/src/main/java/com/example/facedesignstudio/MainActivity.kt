@@ -1,6 +1,7 @@
 package com.example.facedesignstudio
 
 import android.os.Bundle
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.facedesignstudio.ui.FaceDesignApp
 import com.example.facedesignstudio.ui.PlannerViewModel
+import com.example.facedesignstudio.ui.StudioLaunch
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -25,14 +27,22 @@ class MainActivity : ComponentActivity() {
     private val viewModel: PlannerViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_FaceDesignStudio)
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            splashScreen.setOnExitAnimationListener { it.remove() }
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.BLACK),
         )
+        // Load local state while the brief launch animation is on screen.
+        val plannerViewModel = viewModel
         setContent {
             PlannerTheme {
-                FaceDesignApp(viewModel)
+                StudioLaunch(showOnLaunch = savedInstanceState == null) {
+                    FaceDesignApp(plannerViewModel)
+                }
             }
         }
     }

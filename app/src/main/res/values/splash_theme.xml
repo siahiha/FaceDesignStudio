@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Only the starting window uses this theme. MainActivity restores the app theme. -->
+    <style name="Base.Theme.FaceDesignStudio.Launch" parent="Theme.FaceDesignStudio">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:statusBarColor">@color/splash_background</item>
+        <item name="android:navigationBarColor">@color/splash_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+    </style>
+
+    <style name="Theme.FaceDesignStudio.Launch" parent="Base.Theme.FaceDesignStudio.Launch" />
+</resources>
